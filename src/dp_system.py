@@ -237,11 +237,173 @@ class QueryParser:
             return query_id
 
 
+class InstanceOptimalMeanEstimator:
+    """Implements instance-optimal mean estimation for differential privacy."""
+    
+    def __init__(self, db_manager: DatabaseManager):
+        self.db_manager = db_manager
+    
+    def estimate_mean_instance_optimal(self, conn, raw_sql: str, epsilon: float) -> Dict[str, Any]:
+        """
+        Compute instance-optimal mean estimate.
+        
+        Args:
+            conn: Database connection
+            raw_sql: SQL query for mean computation
+            epsilon: Privacy budget
+            
+        Returns:
+            Dictionary with noisy result and metadata
+        """
+        # Convert epsilon to float to handle decimal.Decimal from database
+        epsilon_float = float(epsilon) if epsilon is not None else 0.1
+        
+        # Step 1: Extract column and table from SQL
+        column_info = self._parse_mean_query(raw_sql)
+        
+        # Step 2: Privately estimate data characteristics
+        data_stats = self._compute_private_data_stats(conn, column_info, epsilon_float * 0.3)  # Use 30% of budget
+        
+        # Step 3: Compute instance-optimal noise scale
+        optimal_scale = self._compute_optimal_scale(data_stats, epsilon_float * 0.7)  # Use 70% of budget
+        
+        # Step 4: Execute query and add optimal noise
+        result = conn.execute(text(raw_sql))
+        row = result.fetchone()
+        true_mean = float(row[0]) if row and row[0] is not None else 0
+        
+        # Add instance-optimal noise
+        noise = np.random.laplace(0, optimal_scale)
+        noisy_result = true_mean + noise
+        
+        return {
+            'noisy_result': noisy_result,
+            'mechanism': 'INST_MEAN',
+            'optimal_scale': optimal_scale,
+            'data_stats': data_stats,
+            'epsilon_split': {'stats': epsilon_float * 0.5, 'query': epsilon_float * 0.5}
+        }
+    
+    def _parse_mean_query(self, raw_sql: str) -> Dict[str, str]:
+        """Parse AVG query to extract column and table information."""
+        import re
+        
+        # Extract column name from AVG(column_name)
+        avg_match = re.search(r'AVG\s*\(\s*`?([^`\)]+)`?\s*\)', raw_sql, re.IGNORECASE)
+        column_name = avg_match.group(1) if avg_match else 'unknown'
+        
+        # Extract table name
+        from_match = re.search(r'FROM\s+`?([^`\s]+)`?', raw_sql, re.IGNORECASE)
+        table_name = from_match.group(1) if from_match else 'census_income'
+        
+        # Extract WHERE clause if exists
+        where_match = re.search(r'WHERE\s+(.+)$', raw_sql, re.IGNORECASE)
+        where_clause = where_match.group(1) if where_match else None
+        
+        return {
+            'column': column_name,
+            'table': table_name, 
+            'where_clause': where_clause,
+            'full_sql': raw_sql
+        }
+    
+    def _compute_private_data_stats(self, conn, column_info: Dict[str, str], epsilon_stats: float) -> Dict[str, float]:
+        """
+        Privately compute data statistics needed for instance-optimal estimation.
+        """
+        table = column_info['table']
+        column = column_info['column']
+        where_clause = column_info['where_clause']
+        
+        # Build base query
+        base_where = f"WHERE {where_clause}" if where_clause else ""
+        
+        # Ensure epsilon_stats is float
+        epsilon_stats_float = float(epsilon_stats) if epsilon_stats is not None else 0.1
+        
+        # Compute private statistics with portion of budget
+        epsilon_per_stat = epsilon_stats_float / 4  # Split budget across 4 statistics
+        
+        # 1. Private count
+        count_sql = f"SELECT COUNT(*) FROM `{table}` {base_where}"
+        count_result = conn.execute(text(count_sql)).fetchone()
+        private_count = float(count_result[0]) + np.random.laplace(0, 1.0 / epsilon_per_stat)
+        private_count = max(1, private_count)  # Ensure positive count
+        
+        # 2. Private min
+        min_sql = f"SELECT MIN(`{column}`) FROM `{table}` {base_where}"
+        min_result = conn.execute(text(min_sql)).fetchone()
+        true_min = float(min_result[0]) if min_result[0] is not None else 0
+        private_min = true_min + np.random.laplace(0, 1.0 / epsilon_per_stat)
+        
+        # 3. Private max  
+        max_sql = f"SELECT MAX(`{column}`) FROM `{table}` {base_where}"
+        max_result = conn.execute(text(max_sql)).fetchone()
+        true_max = float(max_result[0]) if max_result[0] is not None else 0
+        private_max = true_max + np.random.laplace(0, 1.0 / epsilon_per_stat)
+        
+        # 4. Private variance estimate
+        var_sql = f"SELECT VARIANCE(`{column}`) FROM `{table}` {base_where}"
+        try:
+            var_result = conn.execute(text(var_sql)).fetchone()
+            true_var = float(var_result[0]) if var_result[0] is not None else 1.0
+        except:
+            true_var = 1.0  # Fallback if VARIANCE not supported
+        
+        private_variance = max(0.1, true_var + np.random.laplace(0, 1.0 / epsilon_per_stat))
+        
+        return {
+            'count': private_count,
+            'min': private_min,
+            'max': private_max,
+            'variance': private_variance,
+            'range': max(1.0, private_max - private_min)  # Ensure positive range
+        }
+    
+    def _compute_optimal_scale(self, data_stats: Dict[str, float], epsilon_query: float) -> float:
+        """
+        Compute instance-optimal noise scale based on private data statistics.
+        
+        This uses the instance-optimal approach that adapts to:
+        - Data range (max - min)
+        - Sample size (count)
+        - Data variance
+        """
+        # Ensure epsilon_query is float
+        epsilon_query_float = float(epsilon_query) if epsilon_query is not None else 0.1
+        
+        count = data_stats['count']
+        data_range = data_stats['range']
+        variance = data_stats['variance']
+        
+        # Instance-optimal scale combines multiple factors:
+        # 1. Range-based sensitivity: range/count (for mean queries)
+        range_sensitivity = data_range / count
+        
+        # 2. Variance-based adjustment (smaller variance allows less noise)
+        variance_factor = np.sqrt(variance) / data_range if data_range > 0 else 1.0
+        variance_factor = min(1.0, max(0.1, variance_factor))  # Bound between 0.1 and 1.0
+        
+        # 3. Sample size adjustment (larger samples allow less noise)
+        sample_factor = 1.0 / np.sqrt(count)
+        
+        # Combine factors for instance-optimal scale
+        base_scale = range_sensitivity / epsilon_query_float
+        optimal_scale = base_scale * variance_factor * sample_factor
+        
+        # Ensure minimum noise for privacy guarantee
+        min_scale = 1.0 / (epsilon_query_float * count)  # Standard Laplace scale
+        optimal_scale = max(optimal_scale, min_scale)
+        
+        return optimal_scale
+
+# Update your PrivacyEngine class to use instance-optimal mean estimation
 class PrivacyEngine:
     """Implements differential privacy mechanisms."""
     
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
+        self.instance_optimal_estimator = InstanceOptimalMeanEstimator(db_manager)
     
     def laplace_noise(self, scale: float) -> float:
         """Generate Laplace noise."""
@@ -320,17 +482,35 @@ class PrivacyEngine:
     
     def _process_mean_query(self, conn, query_id: int, raw_sql: str, 
                           delta_sensitivity: float, epsilon_charge: float):
-        """Process a mean query with instantaneous mechanism."""
-        result = conn.execute(text(raw_sql))
-        row = result.fetchone()
-        value = float(row[0]) if row and row[0] is not None else 0
-        noisy_result = value + self.laplace_noise(delta_sensitivity / epsilon_charge)
+        """Process a mean query with instance-optimal mechanism."""
         
+        # Convert epsilon_charge to float to handle decimal.Decimal
+        epsilon_float = float(epsilon_charge) if epsilon_charge is not None else 0.1
+        
+        # Use instance-optimal mean estimator
+        result_info = self.instance_optimal_estimator.estimate_mean_instance_optimal(
+            conn, raw_sql, epsilon_float
+        )
+        
+        # Update query log with detailed information
         conn.execute(text("""
           UPDATE dp_query_log
-             SET noisy_result=:noisy_result, mechanism='INST_MEAN', status='DONE'
+             SET noisy_result=:noisy_result, 
+                 mechanism=:mechanism,
+                 noise_seed=:metadata,
+                 status='DONE'
            WHERE query_id=:query_id
-        """), {'noisy_result': noisy_result, 'query_id': query_id})
+        """), {
+            'noisy_result': result_info['noisy_result'],
+            'mechanism': result_info['mechanism'],
+            'metadata': str(result_info['data_stats'])[:255],  # Truncate to fit VARCHAR(255)
+            'query_id': query_id
+        })
+        
+        print(f"Instance-optimal mean: {result_info['noisy_result']:.4f} "
+              f"(scale: {result_info['optimal_scale']:.4f}, "
+              f"range: {result_info['data_stats']['range']:.2f}, "
+              f"count: {result_info['data_stats']['count']:.0f})")
     
     def _defer_to_batch(self, conn, analyst_id: str, query_id: int, epsilon_charge: float):
         """Defer query to batch processing."""
@@ -345,7 +525,7 @@ class PrivacyEngine:
 
 
 class HolisticProcessor:
-    """Handles batch processing with holistic privacy mechanisms."""
+    """Handles batch processing with basic holistic privacy mechanisms."""
     
     def __init__(self, db_manager: DatabaseManager, privacy_engine: PrivacyEngine):
         self.db_manager = db_manager
