@@ -51,6 +51,9 @@ class PerformanceAssessment:
             # Initialize fresh system for each iteration
             test_system = DifferentialPrivacySystem()
             test_system.initialize_system()
+
+            # Reset budget for this iteration
+            self._reset_analyst_budget(test_system, 'analyst_1')
             
             # Track query IDs for this iteration
             start_time = time.time()
@@ -58,13 +61,13 @@ class PerformanceAssessment:
             # Submit queries and track their IDs
             iteration_query_ids = []
             for query in self.test_queries:
-                query_id = test_system.submit_query(query)
+                query_id = test_system.submit_query(query, 'analyst_1')
                 iteration_query_ids.append(query_id)
             
             print(f"Submitted queries: {', '.join(map(str, iteration_query_ids))}")
             
             # Process with DP
-            test_system.process_queries()
+            test_system.process_queries('analyst_1')
             test_system.process_batches()
             
             # Get results for ONLY this iteration's queries
@@ -86,6 +89,23 @@ class PerformanceAssessment:
         # Compile final results
         return self._compile_final_results(iteration_results)
     
+    def _reset_analyst_budget(self, test_system, analyst_id: str, total_budget: float = 1.0):
+        """Reset budget for analyst to fresh state."""
+        try:
+            with test_system.db_manager.get_connection() as conn:
+                conn.execute(text("""
+                    UPDATE analyst_budget 
+                    SET epsilon_spent = 0.0, epsilon_total = :epsilon_total 
+                    WHERE analyst_id = :analyst_id
+                """), {
+                    'analyst_id': analyst_id,
+                    'epsilon_total': total_budget
+                })
+                conn.commit()
+                print(f"🔄 Reset budget to {total_budget} epsilon for {analyst_id}")
+        except Exception as e:
+            print(f"Warning: Could not reset budget for {analyst_id}: {e}")
+
     def _cleanup_previous_results(self):
         """Clear previous query logs for clean testing."""
         try:
@@ -122,17 +142,33 @@ class PerformanceAssessment:
         
         # Process each query result
         query_results = []
+        print(f"\n🔍 Detailed Accuracy Loss Analysis for Iteration {iteration}:")
+        print("-" * 60)
+        
         for _, row in results_df.iterrows():
+            accuracy_loss = self._calculate_utility_score(row)
+            true_result = self._get_true_result(row['raw_sql'])
+            
+            # Display individual query accuracy loss
+            query_summary = row['raw_sql'][:50] + "..." if len(row['raw_sql']) > 50 else row['raw_sql']
+            print(f"Query {row['query_id']} ({row['query_type']}): {accuracy_loss:.2f}% accuracy loss")
+            print(f"  SQL: {query_summary}")
+            print(f"  True Result: {true_result:.4f}, Noisy Result: {row['noisy_result']:.4f}")
+            print(f"  Mechanism: {row['mechanism']}, Epsilon: {row['epsilon_charge']}")
+            print()
+            
             query_result = {
                 'iteration': iteration,
                 'query_id': row['query_id'],
                 'query_text': row['raw_sql'],
+                'query_type': row['query_type'],
                 'latency': total_latency / len(results_df) if len(results_df) > 0 else total_latency,
                 'cpu_usage': psutil.cpu_percent(),
-                'utility_score': self._calculate_utility_score(row),
+                'accuracy_loss_percent': accuracy_loss,
                 'epsilon_used': row['epsilon_charge'],
                 'mechanism': row['mechanism'],
                 'noisy_result': row['noisy_result'],
+                'true_result': true_result,  # Add true result
                 'status': row['status']
             }
             query_results.append(query_result)
@@ -147,38 +183,38 @@ class PerformanceAssessment:
                 'success_rate': len(results_df[results_df['status'] == 'DONE']) / len(results_df) * 100 if not results_df.empty else 0
             }
         }
+
+    def _get_true_result(self, raw_sql: str) -> float:
+        """Get the true result for a query."""
+        try:
+            with self.dp_system.db_manager.get_connection() as conn:
+                result = conn.execute(text(raw_sql))
+                row = result.fetchone()
+                return float(row[0]) if row and row[0] is not None else 0
+        except Exception as e:
+            print(f"Warning: Could not get true result for query: {e}")
+            return 0
     
     def _calculate_utility_score(self, query_result) -> float:
-        """Calculate utility score for a query result."""
+        """Calculate accuracy loss (%) for a query result by comparing noisy vs true result."""
         try:
-            # Get true result
-            with self.dp_system.db_manager.get_connection() as conn:
-                true_result = conn.execute(text(query_result['raw_sql']))
-                true_row = true_result.fetchone()
-                true_value = float(true_row[0]) if true_row and true_row[0] is not None else 0
+            # Get true result by executing the raw SQL
+            true_value = self._get_true_result(query_result['raw_sql'])
             
             # Get noisy result
             noisy_value = float(query_result['noisy_result']) if pd.notna(query_result['noisy_result']) else 0
             
-            # Calculate relative error
+            # Calculate accuracy loss percentage
             if true_value != 0:
-                relative_error = abs(true_value - noisy_value) / abs(true_value) * 100
+                accuracy_loss = abs(true_value - noisy_value) / abs(true_value) * 100
             else:
-                relative_error = 0 if noisy_value == 0 else 100
-            
-            # Convert to utility score (0-100, higher is better)
-            if relative_error <= 5:
-                return 100
-            elif relative_error <= 10:
-                return 90
-            elif relative_error <= 20:
-                return 75
-            elif relative_error <= 50:
-                return 50
-            else:
-                return max(0, 50 - (relative_error - 50))
-        except Exception:
-            return 0
+                # Handle case where true value is 0
+                accuracy_loss = abs(noisy_value) if noisy_value != 0 else 0
+
+            return accuracy_loss
+        except Exception as e:
+            print(f"Warning: Could not calculate accuracy loss for query {query_result.get('query_id', 'unknown')}: {e}")
+            return float('inf')
     
     def _compile_final_results(self, iteration_results: List[Dict]) -> Dict[str, Any]:
         """Compile final results from all iterations."""
@@ -190,6 +226,13 @@ class PerformanceAssessment:
         if all_query_results:
             df = pd.DataFrame(all_query_results)
             
+            # Filter out infinite values for accuracy loss calculations
+            valid_accuracy_loss = df[df['accuracy_loss_percent'] != float('inf')]['accuracy_loss_percent']
+            
+            # Calculate per-iteration epsilon usage
+            num_iterations = len(iteration_results)
+            epsilon_per_iteration = df['epsilon_used'].sum() / num_iterations if num_iterations > 0 else 0
+
             summary = {
                 'latency': {
                     'average': df['latency'].mean(),
@@ -203,18 +246,23 @@ class PerformanceAssessment:
                     'median': df['cpu_usage'].median(),
                     'max': df['cpu_usage'].max()
                 },
-                'utility': {
-                    'average': df['utility_score'].mean(),
-                    'median': df['utility_score'].median(),
-                    'std': df['utility_score'].std()
+                'utility': {  # Now represents accuracy loss
+                    'avg_accuracy_loss_percent': valid_accuracy_loss.mean() if not valid_accuracy_loss.empty else 0,
+                    'median_accuracy_loss_percent': valid_accuracy_loss.median() if not valid_accuracy_loss.empty else 0,
+                    'min_accuracy_loss_percent': valid_accuracy_loss.min() if not valid_accuracy_loss.empty else 0,
+                    'max_accuracy_loss_percent': valid_accuracy_loss.max() if not valid_accuracy_loss.empty else 0,
+                    'std_accuracy_loss_percent': valid_accuracy_loss.std() if not valid_accuracy_loss.empty else 0
                 },
                 'privacy': {
-                    'total_epsilon_used': df['epsilon_used'].sum(),
+                    'epsilon_per_iteration': epsilon_per_iteration, 
+                    'total_iterations': num_iterations,  
+                    'total_epsilon_across_iterations': df['epsilon_used'].sum(),
                     'avg_epsilon_per_query': df['epsilon_used'].mean(),
                     'mechanisms_used': df['mechanism'].value_counts().to_dict()
                 },
                 'overall': {
                     'total_queries': len(df),
+                    'queries_per_iteration': len(df) // num_iterations if num_iterations > 0 else 0,
                     'success_rate': len(df[df['status'] == 'DONE']) / len(df) * 100,
                     'throughput': len(df) / df['latency'].sum() if df['latency'].sum() > 0 else 0
                 }
@@ -237,9 +285,57 @@ class PerformanceAssessment:
         report.append("=" * 65)
         report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         report.append(f"Test Queries from Differential Privacy System: {len(self.test_queries)}")
-        for i, query in enumerate(self.test_queries, 1):
-            report.append(f"  {i}. {query}")
         report.append("")
+        
+        # Add detailed per-query accuracy loss analysis
+        if results:
+            report.append("🔍 DETAILED QUERY-BY-QUERY ACCURACY LOSS ANALYSIS")
+            report.append("=" * 55)
+            
+            # Group results by query type for better analysis
+            df = pd.DataFrame(results)
+            
+            # Analyze by query type
+            for query_type in ['single', 'mean', 'batch']:
+                type_results = df[df['query_type'] == query_type]
+                if not type_results.empty:
+                    report.append(f"\n📊 {query_type.upper()} QUERIES:")
+                    report.append("-" * 20)
+                    
+                    for _, row in type_results.iterrows():
+                        if row['accuracy_loss_percent'] != float('inf'):
+                            report.append(f"Query {row['query_id']} (Iteration {row['iteration']}):")
+                            report.append(f"  True Result:    {row['true_result']:.4f}")
+                            report.append(f"  Noisy Result:   {row['noisy_result']:.4f}")
+                            report.append(f"  Accuracy Loss:  {row['accuracy_loss_percent']:.2f}%")
+                            report.append(f"  Mechanism:      {row['mechanism']}")
+                            report.append(f"  Epsilon Used:   {row['epsilon_used']:.2f}")
+                            query_preview = row['query_text'][:60] + "..." if len(row['query_text']) > 60 else row['query_text']
+                            report.append(f"  SQL:            {query_preview}")
+                            report.append("")
+            
+            # Summary statistics by query type
+            report.append("\n📈 ACCURACY LOSS SUMMARY BY QUERY TYPE:")
+            report.append("-" * 45)
+            
+            for query_type in ['single', 'mean', 'batch']:
+                type_results = df[df['query_type'] == query_type]
+                valid_results = type_results[type_results['accuracy_loss_percent'] != float('inf')]
+                
+                if not valid_results.empty:
+                    avg_loss = valid_results['accuracy_loss_percent'].mean()
+                    median_loss = valid_results['accuracy_loss_percent'].median()
+                    min_loss = valid_results['accuracy_loss_percent'].min()
+                    max_loss = valid_results['accuracy_loss_percent'].max()
+                    
+                    report.append(f"{query_type.upper()} Queries ({len(valid_results)} queries):")
+                    report.append(f"  Average Loss: {avg_loss:.2f}%")
+                    report.append(f"  Median Loss:  {median_loss:.2f}%")
+                    report.append(f"  Range:        {min_loss:.2f}% - {max_loss:.2f}%")
+                    report.append("")
+            
+            report.append("=" * 65)
+            report.append("")
         
         if summary:
             # Latency Report
@@ -262,24 +358,33 @@ class PerformanceAssessment:
             # Privacy Report
             report.append("🔒 PRIVACY LEVEL METRICS")
             report.append("-" * 25)
-            report.append(f"Total Epsilon Used:      {summary['privacy']['total_epsilon_used']:.4f}")
-            report.append(f"Average Epsilon/Query:   {summary['privacy']['avg_epsilon_per_query']:.4f}")
+            report.append(f"Epsilon Used Per Iteration:  {summary['privacy']['epsilon_per_iteration']:.4f}")
+            report.append(f"Number of Iterations:        {summary['privacy']['total_iterations']}")
+            report.append(f"Total Budget Per Iteration:  1.0000 (reset each iteration)")
+            report.append(f"Budget Utilization:          {summary['privacy']['epsilon_per_iteration']/1.0*100:.1f}%")
+            report.append(f"Average Epsilon/Query:       {summary['privacy']['avg_epsilon_per_query']:.4f}")
+            report.append("")
             report.append("Mechanisms Used:")
             for mechanism, count in summary['privacy']['mechanisms_used'].items():
                 report.append(f"  - {mechanism}: {count} queries")
             report.append("")
             
-            # Utility Report
-            report.append("📊 UTILITY METRICS")
-            report.append("-" * 18)
-            report.append(f"Average Utility Score:    {summary['utility']['average']:.2f}/100")
-            report.append(f"Median Utility Score:     {summary['utility']['median']:.2f}/100")
+            # Utility Report - UPDATED FOR ACCURACY LOSS
+            report.append("📊 OVERALL UTILITY METRICS (Accuracy Loss)")
+            report.append("-" * 42)
+            report.append(f"Average Accuracy Loss:    {summary['utility']['avg_accuracy_loss_percent']:.2f}%")
+            report.append(f"Median Accuracy Loss:     {summary['utility']['median_accuracy_loss_percent']:.2f}%")
+            report.append(f"Min Accuracy Loss:        {summary['utility']['min_accuracy_loss_percent']:.2f}%")
+            report.append(f"Max Accuracy Loss:        {summary['utility']['max_accuracy_loss_percent']:.2f}%")
+            report.append(f"Std Dev Accuracy Loss:    {summary['utility']['std_accuracy_loss_percent']:.2f}%")
             report.append("")
             
             # Overall Performance
             report.append("⚡ OVERALL PERFORMANCE")
             report.append("-" * 22)
             report.append(f"Success Rate:        {summary['overall']['success_rate']:.1f}%")
+            report.append(f"Queries Per Iteration: {summary['overall']['queries_per_iteration']}")
+            report.append(f"Total Iterations:    {summary['privacy']['total_iterations']}")
             report.append(f"Throughput:          {summary['overall']['throughput']:.2f} queries/second")
             report.append("")
         

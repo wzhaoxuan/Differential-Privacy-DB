@@ -419,11 +419,11 @@ class DifferentialPrivacySystem:
         # Deploy schema
         self.schema_manager.deploy_dp_schema()
     
-    def submit_query(self, sql: str, analyst_id: str = 'analyst_1') -> int:
+    def submit_query(self, sql: str, analyst_id: str) -> int:
         """Submit a query for differential privacy processing."""
         return self.query_parser.parse_and_log(sql, analyst_id)
     
-    def process_queries(self, analyst_id: str = 'analyst_1'):
+    def process_queries(self, analyst_id: str):
         """Process all pending queries."""
         self.privacy_engine.process_pending_queries(analyst_id)
     
