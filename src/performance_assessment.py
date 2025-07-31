@@ -120,7 +120,7 @@ class PerformanceAssessment:
                 conn.execute(text("UPDATE analyst_budget SET epsilon_spent = 0.0 WHERE analyst_id = 'analyst_1'"))
                 conn.commit()
                 
-                print("🧹 Cleared all previous query logs and reset privacy budget")
+                print("Cleared all previous query logs and reset privacy budget")
         except Exception as e:
             print(f"Warning: Could not clear previous logs: {e}")
     
@@ -141,7 +141,7 @@ class PerformanceAssessment:
         
         # Process each query result
         query_results = []
-        print(f"\n🔍 Detailed Per-Query Performance Analysis for Iteration {iteration}:")
+        print(f"\nDetailed Per-Query Performance Analysis for Iteration {iteration}:")
         print("-" * 70)
         
         for _, row in results_df.iterrows():
@@ -307,7 +307,7 @@ class PerformanceAssessment:
         
         # Add detailed per-query performance analysis
         if results:
-            report.append("🔍 DETAILED PER-QUERY PERFORMANCE ANALYSIS")
+            report.append("DETAILED PER-QUERY PERFORMANCE ANALYSIS")
             report.append("=" * 48)
             
             # Group results by actual SQL query (not query type)
@@ -322,7 +322,7 @@ class PerformanceAssessment:
                     # Get first row to determine query type and mechanism
                     first_result = query_results.iloc[0]
                     
-                    report.append(f"\n📊 QUERY {i} ({first_result['query_type'].upper()}):")
+                    report.append(f"\nQUERY {i} ({first_result['query_type'].upper()}):")
                     report.append("-" * 30)
                     query_preview = test_query[:80] + "..." if len(test_query) > 80 else test_query
                     report.append(f"SQL: {query_preview}")
@@ -345,11 +345,11 @@ class PerformanceAssessment:
                         
                         # Performance summary for this specific query
                         report.append(f"Performance Across {len(valid_results)} Iterations:")
-                        report.append(f"  ⏱️  Latency:        Avg: {avg_latency:.4f}s, Median: {median_latency:.4f}s, Std: {std_latency:.4f}s")
-                        report.append(f"  💻 CPU Usage:      Avg: {avg_cpu:.1f}%, Median: {median_cpu:.1f}%, Std: {std_cpu:.1f}%")
-                        report.append(f"  📊 Accuracy Loss:  Avg: {avg_loss:.2f}%, Median: {median_loss:.2f}%, Std: {std_loss:.2f}%")
-                        report.append(f"  🔒 Mechanism:      {first_result['mechanism']}")
-                        report.append(f"  🛡️  Avg Epsilon:    {valid_results['epsilon_used'].mean():.3f}")
+                        report.append(f"  Latency:        Avg: {avg_latency:.4f}s, Median: {median_latency:.4f}s, Std: {std_latency:.4f}s")
+                        report.append(f"  CPU Usage:      Avg: {avg_cpu:.1f}%, Median: {median_cpu:.1f}%, Std: {std_cpu:.1f}%")
+                        report.append(f"  Accuracy Loss:  Avg: {avg_loss:.2f}%, Median: {median_loss:.2f}%, Std: {std_loss:.2f}%")
+                        report.append(f"  Mechanism:      {first_result['mechanism']}")
+                        report.append(f"  Avg Epsilon:    {valid_results['epsilon_used'].mean():.3f}")
                         report.append("")
                         
                         # Show individual iteration results for this query
@@ -367,7 +367,7 @@ class PerformanceAssessment:
         report.append("")
         
         # Overall summary by query type (keep this for comparison)
-        report.append("📈 SUMMARY BY QUERY TYPE:")
+        report.append("SUMMARY BY QUERY TYPE:")
         report.append("-" * 28)
         
         for query_type in ['single', 'mean', 'batch']:
@@ -388,7 +388,7 @@ class PerformanceAssessment:
     
         if summary:
             # Latency Report - Now based on individual measurements
-            report.append("🕐 OVERALL LATENCY METRICS (Per-Query Measurements)")
+            report.append("OVERALL LATENCY METRICS (Per-Query Measurements)")
             report.append("-" * 54)
             report.append(f"Average Latency: {summary['latency']['average']:.4f} seconds")
             report.append(f"Median Latency:  {summary['latency']['median']:.4f} seconds")
@@ -398,7 +398,7 @@ class PerformanceAssessment:
             report.append("")
             
             # CPU Utilization Report - Now based on individual measurements
-            report.append("💻 OVERALL CPU UTILIZATION METRICS (Per-Query Measurements)")
+            report.append("OVERALL CPU UTILIZATION METRICS (Per-Query Measurements)")
             report.append("-" * 61)
             report.append(f"Average CPU Usage: {summary['cpu']['average']:.2f}%")
             report.append(f"Median CPU Usage:  {summary['cpu']['median']:.2f}%")
@@ -408,7 +408,7 @@ class PerformanceAssessment:
             report.append("")
             
             # Privacy Report
-            report.append("🔒 PRIVACY LEVEL METRICS")
+            report.append("PRIVACY LEVEL METRICS")
             report.append("-" * 25)
             report.append(f"Epsilon Used Per Iteration:  {summary['privacy']['epsilon_per_iteration']:.4f}")
             report.append(f"Number of Iterations:        {summary['privacy']['total_iterations']}")
@@ -422,7 +422,7 @@ class PerformanceAssessment:
             report.append("")
             
             # Utility Report - UPDATED FOR ACCURACY LOSS
-            report.append("📊 OVERALL UTILITY METRICS (Accuracy Loss)")
+            report.append("OVERALL UTILITY METRICS (Accuracy Loss)")
             report.append("-" * 42)
             report.append(f"Average Accuracy Loss:    {summary['utility']['avg_accuracy_loss_percent']:.2f}%")
             report.append(f"Median Accuracy Loss:     {summary['utility']['median_accuracy_loss_percent']:.2f}%")
@@ -432,7 +432,7 @@ class PerformanceAssessment:
             report.append("")
             
             # Overall Performance
-            report.append("⚡ OVERALL PERFORMANCE")
+            report.append("OVERALL PERFORMANCE")
             report.append("-" * 22)
             report.append(f"Success Rate:        {summary['overall']['success_rate']:.1f}%")
             report.append(f"Queries Per Iteration: {summary['overall']['queries_per_iteration']}")
