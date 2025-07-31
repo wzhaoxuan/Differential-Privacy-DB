@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import pandas as pd
 from sqlalchemy import create_engine, text
 import numpy as np
@@ -419,11 +426,11 @@ class DifferentialPrivacySystem:
         # Deploy schema
         self.schema_manager.deploy_dp_schema()
     
-    def submit_query(self, sql: str, analyst_id: str) -> int:
+    def submit_query(self, sql: str, analyst_id: str = 'analyst_1') -> int:
         """Submit a query for differential privacy processing."""
         return self.query_parser.parse_and_log(sql, analyst_id)
-    
-    def process_queries(self, analyst_id: str):
+
+    def process_queries(self, analyst_id: str = 'analyst_1'):
         """Process all pending queries."""
         self.privacy_engine.process_pending_queries(analyst_id)
     
