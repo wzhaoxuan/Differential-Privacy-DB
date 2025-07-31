@@ -7,6 +7,30 @@ from typing import Optional, List, Tuple, Dict, Any
 
 import config.db_config as db_config
 
+# Shared query configuration - used by both main system and performance assessment
+DEFAULT_TEST_QUERIES = [
+    # 2 COUNT queries
+    "SELECT COUNT(*) FROM census_income",
+    "SELECT COUNT(*) FROM census_income WHERE `marital.status`='Divorced'",
+    
+    # 2 SUM queries  
+    "SELECT SUM(`hours.per.week`) FROM census_income",
+    "SELECT SUM(age) FROM census_income WHERE `workclass`='Private'",
+    
+    # 2 AVG queries
+    "SELECT AVG(age) FROM census_income", 
+    "SELECT AVG(`hours.per.week`) FROM census_income WHERE `education`='Bachelors'",
+    
+    # 2 BATCH queries (UNION operations)
+    """SELECT COUNT(*) as count_high_income FROM census_income WHERE `income`='>50K'
+        UNION
+        SELECT COUNT(*) as count_low_income FROM census_income WHERE `income`='<=50K'""",
+            
+    """SELECT AVG(age) as avg_age_male FROM census_income WHERE `sex`='Male'
+        UNION  
+        SELECT AVG(age) as avg_age_female FROM census_income WHERE `sex`='Female'"""
+]
+
 
 class DatabaseManager:
     """Handles database connection and basic operations."""
@@ -168,10 +192,16 @@ class QueryParser:
     def classify_query(self, sql: str) -> str:
         """Classify query type."""
         sql_lower = sql.lower()
-        if sql_lower.startswith("select avg"): 
-            return 'mean'
+
+        # Check for batch operations FIRST (highest priority)
         if 'union' in sql_lower or ';' in sql_lower:   
             return 'batch'
+        
+        # Check for mean queries
+        if sql_lower.startswith("select avg"): 
+            return 'mean'
+        
+        # Default to single query
         return 'single'
     
     def parse_and_log(self, raw_sql: str, analyst_id: str = 'analyst_1') -> int:
@@ -236,13 +266,17 @@ class PrivacyEngine:
     
     def _check_and_update_budget(self, conn, analyst_id: str, epsilon_charge: float) -> bool:
         """Check if analyst has enough budget and update if so."""
+
+        # Convert to float to ensure consistent type handling
+        epsilon_charge_float = float(epsilon_charge)
+
         result = conn.execute(text("""
           UPDATE analyst_budget
              SET epsilon_spent = epsilon_spent + :epsilon_charge
            WHERE analyst_id = :analyst_id
              AND epsilon_spent + :epsilon_charge <= epsilon_total
         """), {
-            'epsilon_charge': epsilon_charge,
+            'epsilon_charge': epsilon_charge_float,
             'analyst_id': analyst_id
         })
         
@@ -332,13 +366,17 @@ class HolisticProcessor:
         """), {'batch_id': batch_id})
         
         members = list(result)
+
+        # Convert epsilon_charge to float to avoid decimal/float operation issues
+        epsilon_charge_float = float(epsilon_charge)
         
         # Process each query in the batch with identity strategy
         for idx, (query_id, raw_sql) in enumerate(members):
             query_result = conn.execute(text(raw_sql))
             row = query_result.fetchone()
             value = float(row[0]) if row and row[0] is not None else 0
-            noisy_result = value + self.privacy_engine.laplace_noise(1.0 / epsilon_charge)
+            # Use converted float value for division
+            noisy_result = value + self.privacy_engine.laplace_noise(1.0 / epsilon_charge_float)
             
             # Store measurement
             conn.execute(text("""
@@ -397,6 +435,67 @@ class DifferentialPrivacySystem:
         """Get all query results."""
         with self.db_manager.get_connection() as conn:
             return pd.read_sql("SELECT * FROM dp_query_log", conn)
+    
+    def get_specific_query_results(self, query_ids: List[int]) -> pd.DataFrame:
+        """Get results for specific query IDs only."""
+        if not query_ids:
+            return pd.DataFrame()
+        
+        query_ids_str = ','.join(map(str, query_ids))
+        with self.db_manager.get_connection() as conn:
+            return pd.read_sql(
+                f"SELECT * FROM dp_query_log WHERE query_id IN ({query_ids_str}) ORDER BY query_id", 
+                conn
+            )
+    
+    def clear_previous_results(self):
+        """Clear previous query logs for a fresh start."""
+        try:
+            with self.db_manager.get_connection() as conn:
+                conn.execute(text("DELETE FROM dp_query_log"))
+                conn.execute(text("DELETE FROM dp_batch"))
+                conn.execute(text("DELETE FROM dp_batch_member"))
+                conn.execute(text("DELETE FROM dp_measurement"))
+                conn.execute(text("UPDATE analyst_budget SET epsilon_spent = 0.0 WHERE analyst_id = 'analyst_1'"))
+                conn.commit()
+                print("🧹 Cleared previous query logs and reset privacy budget")
+        except Exception as e:
+            print(f"Warning: Could not clear previous logs: {e}")
+    
+    def get_default_test_queries(self) -> List[str]:
+        """Get the default test queries used by the system."""
+        return DEFAULT_TEST_QUERIES.copy()
+    
+    def run_default_test(self):
+        """Run the default test queries."""
+        print("Submitting queries...")
+        query_ids = []
+        
+        # Submit queries and track their IDs
+        for i, query in enumerate(DEFAULT_TEST_QUERIES, 1):
+            query_id = self.submit_query(query)
+            query_ids.append(query_id)
+        
+        print(f"Submitted queries: {', '.join(map(str, query_ids))}")
+        
+        # Process queries
+        print("Processing with differential privacy...")
+        self.process_queries()
+        time.sleep(1)
+        self.process_batches()
+        
+        # View results - Get only the current run's results
+        print("Getting results...")
+        results = self.get_specific_query_results(query_ids)
+        print("DIFFERENTIAL PRIVACY RESULTS:")
+        print("="*50)
+        if not results.empty:
+            print(results[['query_id', 'query_type', 'mechanism', 'noisy_result', 'epsilon_charge', 'status']].to_string(index=False))
+        else:
+            print("No results found")
+        print("="*50)
+        
+        return results
 
 
 # Usage example
@@ -405,28 +504,8 @@ if __name__ == "__main__":
     dp_system = DifferentialPrivacySystem()
     dp_system.initialize_system()
     
-    # Submit queries including hours_per_week
-    print("📝 Submitting queries...")
-    q1 = dp_system.submit_query("SELECT COUNT(*) FROM census_income")
-    q2 = dp_system.submit_query("SELECT AVG(age) FROM census_income") 
-    q3 = dp_system.submit_query("SELECT SUM(`hours.per.week`) FROM census_income")
-    q4 = dp_system.submit_query("SELECT COUNT(*) FROM census_income WHERE sex='Female'")
+    # Optional: Clear previous results for a fresh start
+    dp_system.clear_previous_results()
     
-    print(f"✅ Submitted queries: {q1}, {q2}, {q3}, {q4}")
-    
-    # Process queries
-    print("🔒 Processing with differential privacy...")
-    dp_system.process_queries()
-    time.sleep(1)
-    dp_system.process_batches()
-    
-    # View results
-    print("📊 Getting results...")
-    results = dp_system.get_query_results()
-    print("🎯 DIFFERENTIAL PRIVACY RESULTS:")
-    print("="*50)
-    if not results.empty:
-        print(results[['query_id', 'query_type', 'mechanism', 'noisy_result', 'epsilon_charge', 'status']].to_string())
-    else:
-        print("No results found")
-    print("="*50)
+    # Run default test
+    dp_system.run_default_test()

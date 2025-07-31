@@ -23,7 +23,7 @@ def quick_performance_test():
         "SELECT COUNT(*) FROM census_income",
         "SELECT AVG(age) FROM census_income", 
         "SELECT SUM(hours_per_week) FROM census_income",
-        "SELECT COUNT(*) FROM census_income WHERE sex='Female'"
+        "SELECT COUNT(*) FROM census_income WHERE `marital.status`='Divorced'"
     ]
     
     print("\n2️⃣  Measuring Performance Metrics...")

@@ -25,7 +25,7 @@ def quick_performance_test():
         "SELECT COUNT(*) FROM census_income",
         "SELECT AVG(age) FROM census_income", 
         "SELECT SUM(`hours.per.week`) FROM census_income",  # Correct column name with backticks
-        "SELECT COUNT(*) FROM census_income WHERE sex='Female'"
+        "SELECT COUNT(*) FROM census_income WHERE `marital.status`='Divorced'"
     ]
     
     print(f"\n2️⃣  Running performance test with {len(queries)} queries...")

@@ -1,0 +1,336 @@
+{
+  "query_results": [
+    {
+      "iteration": 1,
+      "query_id": 330,
+      "query_text": "SELECT COUNT(*) FROM census_income",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 51.3,
+      "utility_score": 50,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 78.943501,
+      "status": "DONE"
+    },
+    {
+      "iteration": 1,
+      "query_id": 331,
+      "query_text": "SELECT COUNT(*) FROM census_income WHERE `marital.status`='Divorced'",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 80.0,
+      "utility_score": 42.71113333333333,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 7.688004,
+      "status": "DONE"
+    },
+    {
+      "iteration": 1,
+      "query_id": 332,
+      "query_text": "SELECT SUM(`hours.per.week`) FROM census_income",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 0.0,
+      "utility_score": 100,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 4818.418834,
+      "status": "DONE"
+    },
+    {
+      "iteration": 1,
+      "query_id": 333,
+      "query_text": "SELECT SUM(age) FROM census_income WHERE `workclass`='Private'",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 0.0,
+      "utility_score": 100,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 2477.876378,
+      "status": "DONE"
+    },
+    {
+      "iteration": 1,
+      "query_id": 334,
+      "query_text": "SELECT AVG(age) FROM census_income",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 0.0,
+      "utility_score": 100,
+      "epsilon_used": 0.1,
+      "mechanism": "INST_MEAN",
+      "noisy_result": 46.991528,
+      "status": "DONE"
+    },
+    {
+      "iteration": 1,
+      "query_id": 335,
+      "query_text": "SELECT AVG(`hours.per.week`) FROM census_income WHERE `education`='Bachelors'",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 0.0,
+      "utility_score": 75,
+      "epsilon_used": 0.1,
+      "mechanism": "INST_MEAN",
+      "noisy_result": 56.247628,
+      "status": "DONE"
+    },
+    {
+      "iteration": 1,
+      "query_id": 336,
+      "query_text": "SELECT COUNT(*) as count_high_income FROM census_income WHERE `income`='>50K'\n        UNION\n        SELECT COUNT(*) as count_low_income FROM census_income WHERE `income`='<=50K'",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 0.0,
+      "utility_score": 90,
+      "epsilon_used": 0.2,
+      "mechanism": "HOLISTIC",
+      "noisy_result": 74.592019,
+      "status": "DONE"
+    },
+    {
+      "iteration": 1,
+      "query_id": 337,
+      "query_text": "SELECT AVG(age) as avg_age_male FROM census_income WHERE `sex`='Male'\n        UNION  \n        SELECT AVG(age) as avg_age_female FROM census_income WHERE `sex`='Female'",
+      "latency": 0.011112421751022339,
+      "cpu_usage": 0.0,
+      "utility_score": 90,
+      "epsilon_used": 0.2,
+      "mechanism": "HOLISTIC",
+      "noisy_result": 40.828022,
+      "status": "DONE"
+    },
+    {
+      "iteration": 2,
+      "query_id": 338,
+      "query_text": "SELECT COUNT(*) FROM census_income",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 36.8,
+      "utility_score": 90,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 105.531668,
+      "status": "DONE"
+    },
+    {
+      "iteration": 2,
+      "query_id": 339,
+      "query_text": "SELECT COUNT(*) FROM census_income WHERE `marital.status`='Divorced'",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 44.93414,
+      "status": "DONE"
+    },
+    {
+      "iteration": 2,
+      "query_id": 340,
+      "query_text": "SELECT SUM(`hours.per.week`) FROM census_income",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 0.0,
+      "utility_score": 100,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 4805.234818,
+      "status": "DONE"
+    },
+    {
+      "iteration": 2,
+      "query_id": 341,
+      "query_text": "SELECT SUM(age) FROM census_income WHERE `workclass`='Private'",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 0.0,
+      "utility_score": 100,
+      "epsilon_used": 0.05,
+      "mechanism": "LAPLACE",
+      "noisy_result": 2459.853333,
+      "status": "DONE"
+    },
+    {
+      "iteration": 2,
+      "query_id": 342,
+      "query_text": "SELECT AVG(age) FROM census_income",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 83.3,
+      "utility_score": 0,
+      "epsilon_used": 0.1,
+      "mechanism": null,
+      "noisy_result": NaN,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 2,
+      "query_id": 343,
+      "query_text": "SELECT AVG(`hours.per.week`) FROM census_income WHERE `education`='Bachelors'",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.1,
+      "mechanism": null,
+      "noisy_result": NaN,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 2,
+      "query_id": 344,
+      "query_text": "SELECT COUNT(*) as count_high_income FROM census_income WHERE `income`='>50K'\n        UNION\n        SELECT COUNT(*) as count_low_income FROM census_income WHERE `income`='<=50K'",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.2,
+      "mechanism": null,
+      "noisy_result": NaN,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 2,
+      "query_id": 345,
+      "query_text": "SELECT AVG(age) as avg_age_male FROM census_income WHERE `sex`='Male'\n        UNION  \n        SELECT AVG(age) as avg_age_female FROM census_income WHERE `sex`='Female'",
+      "latency": 0.007638514041900635,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.2,
+      "mechanism": null,
+      "noisy_result": NaN,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 346,
+      "query_text": "SELECT COUNT(*) FROM census_income",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 31.0,
+      "utility_score": 0,
+      "epsilon_used": 0.05,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 347,
+      "query_text": "SELECT COUNT(*) FROM census_income WHERE `marital.status`='Divorced'",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.05,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 348,
+      "query_text": "SELECT SUM(`hours.per.week`) FROM census_income",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.05,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 349,
+      "query_text": "SELECT SUM(age) FROM census_income WHERE `workclass`='Private'",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.05,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 350,
+      "query_text": "SELECT AVG(age) FROM census_income",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 50.0,
+      "utility_score": 0,
+      "epsilon_used": 0.1,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 351,
+      "query_text": "SELECT AVG(`hours.per.week`) FROM census_income WHERE `education`='Bachelors'",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.1,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 352,
+      "query_text": "SELECT COUNT(*) as count_high_income FROM census_income WHERE `income`='>50K'\n        UNION\n        SELECT COUNT(*) as count_low_income FROM census_income WHERE `income`='<=50K'",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.2,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    },
+    {
+      "iteration": 3,
+      "query_id": 353,
+      "query_text": "SELECT AVG(age) as avg_age_male FROM census_income WHERE `sex`='Male'\n        UNION  \n        SELECT AVG(age) as avg_age_female FROM census_income WHERE `sex`='Female'",
+      "latency": 0.006528139114379883,
+      "cpu_usage": 0.0,
+      "utility_score": 0,
+      "epsilon_used": 0.2,
+      "mechanism": null,
+      "noisy_result": null,
+      "status": "FAILED"
+    }
+  ],
+  "summary": {
+    "latency": {
+      "average": 0.008426358302434286,
+      "median": 0.007638514041900635,
+      "std": 0.001994677397004292,
+      "min": 0.006528139114379883,
+      "max": 0.011112421751022339
+    },
+    "cpu": {
+      "average": 13.85,
+      "median": 0.0,
+      "max": 83.3
+    },
+    "utility": {
+      "average": 39.07129722222222,
+      "median": 0.0,
+      "std": 45.498041291602426
+    },
+    "privacy": {
+      "total_epsilon_used": 2.4000000000000004,
+      "avg_epsilon_per_query": 0.10000000000000002,
+      "mechanisms_used": {
+        "LAPLACE": 8,
+        "INST_MEAN": 2,
+        "HOLISTIC": 2
+      }
+    },
+    "overall": {
+      "total_queries": 24,
+      "success_rate": 50.0,
+      "throughput": 118.67522886026703
+    }
+  },
+  "test_queries": [
+    "SELECT COUNT(*) FROM census_income",
+    "SELECT COUNT(*) FROM census_income WHERE `marital.status`='Divorced'",
+    "SELECT SUM(`hours.per.week`) FROM census_income",
+    "SELECT SUM(age) FROM census_income WHERE `workclass`='Private'",
+    "SELECT AVG(age) FROM census_income",
+    "SELECT AVG(`hours.per.week`) FROM census_income WHERE `education`='Bachelors'",
+    "SELECT COUNT(*) as count_high_income FROM census_income WHERE `income`='>50K'\n        UNION\n        SELECT COUNT(*) as count_low_income FROM census_income WHERE `income`='<=50K'",
+    "SELECT AVG(age) as avg_age_male FROM census_income WHERE `sex`='Male'\n        UNION  \n        SELECT AVG(age) as avg_age_female FROM census_income WHERE `sex`='Female'"
+  ],
+  "timestamp": "2025-07-31T13:59:15.933841"
+}
