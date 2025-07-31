@@ -75,7 +75,7 @@ class DataLoader:
         self.db_manager = db_manager
     
     def load_and_prepare_data(self, csv_path: str = 'dataset/adult.csv', 
-                            num_rows: int = 100) -> pd.DataFrame:
+                            num_rows: int = 1000) -> pd.DataFrame:
         """Load and sanitize data from CSV."""
         df = (
             pd.read_csv(csv_path)
@@ -417,7 +417,7 @@ class DifferentialPrivacySystem:
         self.privacy_engine = PrivacyEngine(self.db_manager)
         self.holistic_processor = HolisticProcessor(self.db_manager, self.privacy_engine)
     
-    def initialize_system(self, csv_path: str = 'dataset/adult.csv', num_rows: int = 100):
+    def initialize_system(self, csv_path: str = 'dataset/adult.csv', num_rows: int = 1000):
         """Initialize the entire differential privacy system."""
         # Load data
         df = self.data_loader.load_and_prepare_data(csv_path, num_rows)
